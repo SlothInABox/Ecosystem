@@ -4,13 +4,14 @@ using UnityEngine;
 
 public class MapGenerator : MonoBehaviour
 {
-    [SerializeField] private Transform tilePrefab;
+    [SerializeField] private Transform groundTilePrefab;
+    [SerializeField] private Transform waterTilePrefab;
 
-    [SerializeField] private Transform obstaclePrefab;
-    [Range(0, 1)]
-    [SerializeField] private float obstacleDensity;
 
     [SerializeField] private Vector2 mapSize;
+    [Range(0, 1)]
+    [SerializeField] private float waterDensity;
+
     [SerializeField] private int seed;
 
     private Coord mapCentre;
@@ -19,6 +20,9 @@ public class MapGenerator : MonoBehaviour
     private List<Coord> allTileCoords;
     private Queue<Coord> shuffledTileCoords;
 
+    // Tile map
+    private TileType[,] tileMap;
+
     private void Start()
     {
         GenerateMap();
@@ -26,6 +30,7 @@ public class MapGenerator : MonoBehaviour
 
     public void GenerateMap()
     {
+        // Make a list of all tile coordinates.
         allTileCoords = new List<Coord>();
         for (int x = 0; x < mapSize.x; x++)
         {
@@ -34,53 +39,67 @@ public class MapGenerator : MonoBehaviour
                 allTileCoords.Add(new Coord(x, z));
             }
         }
+        // Make a shuffled queue of all tile coordinates.
         shuffledTileCoords = new Queue<Coord>(Utility.ShuffleArray(allTileCoords.ToArray(), seed));
+        // Calculate the central tile coordinate.
         mapCentre = new Coord((int)(mapSize.x / 2), (int)(mapSize.y / 2));
 
+        // Create a tile map from which tiles will be created.
+        tileMap = new TileType[(int)mapSize.x, (int)mapSize.y];
+
+        // Calculate number of water tiles to try to create.
+        int waterTileCount = (int)(mapSize.x * mapSize.y * waterDensity);
+        int currentWaterTileCount = 0;
+        for (int i = 0; i < waterTileCount; i++)
+        {
+            // Select a random coordinate.
+            Coord randomCoord = GetRandomCoord();
+
+            if (randomCoord != mapCentre)
+            {
+                // Set the tile type to Water.
+                tileMap[randomCoord.x, randomCoord.y] = TileType.Water;
+                currentWaterTileCount++;
+
+                if (!MapIsFullyAccessible(currentWaterTileCount))
+                {
+                    tileMap[randomCoord.x, randomCoord.y] = TileType.Ground;
+                    currentWaterTileCount--;
+                }
+            }
+        }
+
+        // Create a store for the map tiles
         string holderName = "Generated Map";
         if (transform.Find(holderName))
         {
             DestroyImmediate(transform.Find(holderName).gameObject);
         }
-
         Transform mapHolder = new GameObject(holderName).transform;
         mapHolder.parent = transform;
 
+        // Instantiate tiles.
         for (int x = 0; x < mapSize.x; x++)
         {
-            for (int z = 0; z < mapSize.y; z++)
+            for (int y = 0; y < mapSize.y; y++)
             {
-                Vector3 tilePos = CoordToPosition(x, z);
-                Transform newTile = Instantiate(tilePrefab, tilePos, Quaternion.identity, mapHolder);
-            }
-        }
+                Vector3 tilePos = CoordToPosition(x, y);
 
-        bool[,] obstacleMap = new bool[(int)mapSize.x, (int)mapSize.y];
-
-        int obstacleCount = (int)(mapSize.x * mapSize.y * obstacleDensity);
-        int currentObstacleCount = 0;
-        for (int i = 0; i < obstacleCount; i++)
-        {
-            Coord randomCoord = GetRandomCoord();
-            obstacleMap[randomCoord.x, randomCoord.y] = true;
-            currentObstacleCount++;
-
-            if (randomCoord != mapCentre && MapIsFullyAccessible(obstacleMap, currentObstacleCount))
-            {
-                Vector3 obstaclePosition = CoordToPosition(randomCoord.x, randomCoord.y);
-                Transform newObstacle = Instantiate(obstaclePrefab, obstaclePosition + Vector3.up, Quaternion.identity, mapHolder);
-            }
-            else
-            {
-                obstacleMap[randomCoord.x, randomCoord.y] = false;
-                currentObstacleCount--;
+                if (tileMap[x, y] == TileType.Ground)
+                {
+                    Instantiate(groundTilePrefab, tilePos, Quaternion.identity, mapHolder);
+                }
+                else if (tileMap[x, y] == TileType.Water)
+                {
+                    Instantiate(waterTilePrefab, tilePos, Quaternion.identity, mapHolder);
+                }
             }
         }
     }
 
-    private bool MapIsFullyAccessible(bool[,] obstacleMap, int currentObstacleCount)
+    private bool MapIsFullyAccessible(int currentObstacleCount)
     {
-        bool[,] mapFlags = new bool[obstacleMap.GetLength(0), obstacleMap.GetLength(1)];
+        bool[,] mapFlags = new bool[tileMap.GetLength(0), tileMap.GetLength(1)];
         Queue<Coord> queue = new Queue<Coord>();
 
         queue.Enqueue(mapCentre);
@@ -100,9 +119,9 @@ public class MapGenerator : MonoBehaviour
                     int neighbourY = tile.y + y;
                     if (x == 0 || y == 0)
                     {
-                        if (neighbourX >= 0 && neighbourX < obstacleMap.GetLength(0) && neighbourY >= 0 && neighbourY < obstacleMap.GetLength(1))
+                        if (neighbourX >= 0 && neighbourX < tileMap.GetLength(0) && neighbourY >= 0 && neighbourY < tileMap.GetLength(1))
                         {
-                            if(!mapFlags[neighbourX, neighbourY] && !obstacleMap[neighbourX, neighbourY])
+                            if(!mapFlags[neighbourX, neighbourY] && tileMap[neighbourX, neighbourY] == TileType.Ground)
                             {
                                 mapFlags[neighbourX, neighbourY] = true;
                                 queue.Enqueue(new Coord(neighbourX, neighbourY));
@@ -150,5 +169,11 @@ public class MapGenerator : MonoBehaviour
         {
             return !(c1 == c2);
         }
+    }
+
+    public enum TileType
+    {
+        Ground,
+        Water
     }
 }
