@@ -7,10 +7,16 @@ public class MapGenerator : MonoBehaviour
     // Tile types.
     [SerializeField] private Transform groundTilePrefab;
     [SerializeField] private Transform waterTilePrefab;
+    [SerializeField] private Transform treePrefab;
+    [SerializeField] private Transform plantPrefab;
 
     [SerializeField] private Vector2 mapSize;
     [Range(0, 1)]
     [SerializeField] private float waterDensity;
+    [Range(0, 1)]
+    [SerializeField] private float treeDensity;
+    [Range(0, 1)]
+    [SerializeField] private float plantDensity;
 
     [SerializeField] private int seed;
 
@@ -27,6 +33,7 @@ public class MapGenerator : MonoBehaviour
     private void Start()
     {
         GenerateMap();
+        GenerateEnvironment();
     }
 
     public void GenerateMap()
@@ -80,19 +87,67 @@ public class MapGenerator : MonoBehaviour
         mapHolder.parent = transform;
 
         // Instantiate tiles.
-        for (int x = 0; x < mapSize.x; x++)
+        foreach (Coord tileCoord in allTileCoords)
         {
-            for (int y = 0; y < mapSize.y; y++)
-            {
-                Vector3 tilePos = CoordToPosition(x, y);
+            Vector3 tilePos = CoordToPosition(tileCoord.x, tileCoord.y);
 
-                if (tileMap[x, y] == TileType.Ground)
+            if (tileMap[tileCoord.x, tileCoord.y] == TileType.Ground)
+            {
+                Instantiate(groundTilePrefab, tilePos, Quaternion.identity, mapHolder);
+            }
+            else if (tileMap[tileCoord.x, tileCoord.y] == TileType.Water)
+            {
+                Instantiate(waterTilePrefab, tilePos, Quaternion.identity, mapHolder);
+            }
+        }
+    }
+
+    // Member function for generating the plants and trees.
+    public void GenerateEnvironment()
+    {
+        // Get number of valid tiles.
+        int validTiles = 0;
+        foreach (TileType tile in tileMap)
+        {
+            if (tile == TileType.Ground)
+            {
+                validTiles++;
+            }
+        }
+
+        // Create a store for the environment objects
+        string holderName = "Objects";
+        if (transform.Find(holderName))
+        {
+            DestroyImmediate(transform.Find(holderName).gameObject);
+        }
+        Transform objectHolder = new GameObject(holderName).transform;
+        objectHolder.parent = transform;
+
+        // Calculate the number of trees and plants to generate
+        float normalisedTreeDensity = treeDensity * (treeDensity + plantDensity) / 2;
+        float normalisedPlantDensity = plantDensity * (treeDensity + plantDensity) / 2;
+        int numberOfTrees = (int)(normalisedTreeDensity * validTiles);
+        int numberOfPlants = (int)(normalisedPlantDensity * validTiles);
+
+        int currentNumberOfTrees = 0;
+        int currentNumberOfPlants = 0;
+        while (currentNumberOfTrees < numberOfTrees || currentNumberOfPlants < numberOfPlants)
+        {
+            Coord randomCoord = GetRandomCoord();
+            if (tileMap[randomCoord.x, randomCoord.y] == TileType.Ground)
+            {
+                Vector3 tilePos = CoordToPosition(randomCoord.x, randomCoord.y) + Vector3.up * 0.5f;
+
+                if(currentNumberOfTrees < numberOfTrees)
                 {
-                    Instantiate(groundTilePrefab, tilePos, Quaternion.identity, mapHolder);
+                    currentNumberOfTrees++;
+                    Instantiate(treePrefab, tilePos, Quaternion.identity, objectHolder);
                 }
-                else if (tileMap[x, y] == TileType.Water)
+                else if (currentNumberOfPlants < numberOfPlants)
                 {
-                    Instantiate(waterTilePrefab, tilePos, Quaternion.identity, mapHolder);
+                    currentNumberOfPlants++;
+                    Instantiate(plantPrefab, tilePos, Quaternion.identity, objectHolder);
                 }
             }
         }

@@ -11,9 +11,15 @@ public class MapEditor : Editor
         base.OnInspectorGUI();
 
         MapGenerator map = target as MapGenerator;
+
         if (GUILayout.Button("Generate Terrain"))
         {
             map.GenerateMap();
+        }
+
+        if(GUILayout.Button("Generate Environment"))
+        {
+            map.GenerateEnvironment();
         }
     }
 }
